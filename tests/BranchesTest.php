@@ -1,0 +1,263 @@
+<?php
+
+use PHPUnit\Framework\TestCase;
+
+class BranchesTest extends TestCase
+{
+    /**
+     * @dataProvider provideBranches
+     */
+    public function testBranches(
+        array $expected,
+        string $defaultBranch,
+        string $minimumCmsMajor,
+        string $composerJson = '',
+        string $branchesJson = '',
+        string $tagsJson = ''
+    ) {
+        $actual = branches($defaultBranch, $minimumCmsMajor, $composerJson, $branchesJson, $tagsJson);
+        $this->assertSame($expected, $actual);
+    }
+
+    public function provideBranches()
+    {
+        return [
+            '5.1.0-beta1, CMS 6 branch detected on silverstripe/framework' => [
+                'expected' => ['4.13', '4', '5.0', '5.1', '5', '6'],
+                'defaultBranch' => '5',
+                'minimumCmsMajor' => '4',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "silverstripe/framework": "^5.0"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "3"},
+                    {"name": "3.6"},
+                    {"name": "3.7"},
+                    {"name": "4"},
+                    {"name": "4.10"},
+                    {"name": "4.11"},
+                    {"name": "4.12"},
+                    {"name": "4.13"},
+                    {"name": "5"},
+                    {"name": "5.0"},
+                    {"name": "5.1"},
+                    {"name": "6"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "5.1.0-beta1"},
+                    {"name": "5.0.9"},
+                    {"name": "4.13.11"},
+                    {"name": "4.12.11"},
+                    {"name": "4.11.11"},
+                    {"name": "4.10.11"},
+                    {"name": "3.7.4"}
+                ]
+                EOT,
+            ],
+            '5.1.0 stable and match on silverstripe/cms' => [
+                'expected' => ['4.13', '4', '5.1', '5'],
+                'defaultBranch' => '5',
+                'minimumCmsMajor' => '4',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "silverstripe/cms": "^5.1"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "3"},
+                    {"name": "3.6"},
+                    {"name": "3.7"},
+                    {"name": "4"},
+                    {"name": "4.10"},
+                    {"name": "4.11"},
+                    {"name": "4.12"},
+                    {"name": "4.13"},
+                    {"name": "5"},
+                    {"name": "5.0"},
+                    {"name": "5.1"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "5.1.0"},
+                    {"name": "5.0.9"},
+                    {"name": "4.13.11"},
+                    {"name": "4.12.11"},
+                    {"name": "4.11.11"},
+                    {"name": "4.10.11"},
+                    {"name": "3.7.4"}
+                ]
+                EOT,
+            ],
+            'match on silverstripe/assets' => [
+                'expected' => ['4.13', '4', '5.1', '5'],
+                'defaultBranch' => '5',
+                'minimumCmsMajor' => '4',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "silverstripe/assets": "^2.0"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "4"},
+                    {"name": "4.10"},
+                    {"name": "4.11"},
+                    {"name": "4.12"},
+                    {"name": "4.13"},
+                    {"name": "5"},
+                    {"name": "5.0"},
+                    {"name": "5.1"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "5.1.0"},
+                    {"name": "5.0.9"},
+                    {"name": "4.13.11"},
+                    {"name": "4.12.11"},
+                    {"name": "4.11.11"},
+                    {"name": "4.10.11"}
+                ]
+                EOT,
+            ],
+            'match on silverstripe/mfa' => [
+                'expected' => ['4.13', '4', '5.1', '5'],
+                'defaultBranch' => '5',
+                'minimumCmsMajor' => '4',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "silverstripe/mfa": "^5.0"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "4"},
+                    {"name": "4.12"},
+                    {"name": "4.13"},
+                    {"name": "5"},
+                    {"name": "5.0"},
+                    {"name": "5.1"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "5.1.0"},
+                    {"name": "5.0.9"},
+                    {"name": "4.13.11"}
+                ]
+                EOT,
+            ],
+            'Missing `1` branch and match on php version in composer.json' => [
+                'expected' => ['1.13', '2.0', '2.1', '2'],
+                'defaultBranch' => '2',
+                'minimumCmsMajor' => '4',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "php": "^8.1"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "1.10"},
+                    {"name": "1.11"},
+                    {"name": "1.12"},
+                    {"name": "1.13"},
+                    {"name": "2"},
+                    {"name": "2.0"},
+                    {"name": "2.1"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "2.1.0-beta1"},
+                    {"name": "2.0.9"},
+                    {"name": "1.13.11"},
+                    {"name": "1.12.11"},
+                    {"name": "1.11.11"},
+                    {"name": "1.10.11"}
+                ]
+                EOT,
+            ],
+            'Two minor branches without stable tags in composer.json' => [
+                'expected' => ['1.13', '1', '2.1', '2.2', '2.3', '2'],
+                'defaultBranch' => '2',
+                'minimumCmsMajor' => '4',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "php": "^8.1"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "2"},
+                    {"name": "2.0"},
+                    {"name": "2.1"},
+                    {"name": "2.2"},
+                    {"name": "2.3"},
+                    {"name": "1"},
+                    {"name": "1.13"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "2.3.0-alpha1"},
+                    {"name": "2.2.0-beta1"},
+                    {"name": "2.1.0"},
+                    {"name": "2.0.9"},
+                    {"name": "1.13.11"}
+                ]
+                EOT,
+                ],
+            'Module where default branch has not been changed from CMS 4 and there is a new CMS 6 branch' => [
+                'expected' => ['5.9', '5', '6.0', '6', '7'],
+                'defaultBranch' => '5', // this repo has a `5` branch for CMS 4 and a '6' branch for CMS 5
+                'minimumCmsMajor' => '4',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "php": "^7.4",
+                        "silverstripe/framework": "^4.11"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "7"},
+                    {"name": "6"},
+                    {"name": "6.0"},
+                    {"name": "5"},
+                    {"name": "5.9"},
+                    {"name": "5.8"},
+                    {"name": "5.7"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "6.0.0"},
+                    {"name": "5.9.1"},
+                    {"name": "4.0.1"}
+                ]
+                EOT,
+            ],
+        ];
+    }
+}
