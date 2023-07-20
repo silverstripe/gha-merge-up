@@ -197,4 +197,23 @@ runs:
           git commit --no-edit
           git push origin $INTO_BRANCH
           echo "Succesfully merged-up $FROM_BRANCH into $INTO_BRANCH"
+
+          # Trigger the CI workflow manually via GitHub API
+          # Do this because the ci.yml `push` event does not seem to be triggered by another workflow doing a push,
+          # instead it only seems to be triggered by a normal git user doing a push
+          # https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#create-a-workflow-dispatch-event
+          RESP_CODE=$(curl -w %{http_code} -s -L -o /dev/null \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ github.token }}"\
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/dispatches \
+            -d "{\"ref\":\"$INTO_BRANCH\"}"
+          )
+          if [[ $RESP_CODE != "204" ]]; then
+            echo "Failed to dispatch workflow - HTTP response code was $RESP_CODE"
+            exit 1
+          else
+            echo "Succesfully triggered CI workflow for $INTO_BRANCH"
+          fi
         done
