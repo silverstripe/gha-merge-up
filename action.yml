@@ -74,7 +74,7 @@ runs:
         # Download composer.json for use in branches.php
         curl -s -o __composer.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$DEFAULT_BRANCH/composer.json
 
-        BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php ${{ github.action_path }}/branches.php)
+        BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH GITHUB_REPOSITORY=$GITHUB_REPOSITORY php ${{ github.action_path }}/branches.php)
         echo "BRANCHES is $BRANCHES"
         if [[ $BRANCHES =~ "^FAILURE \- (.+)$" ]]; then
           MESSAGE=${BASH_REMATCH[1]}

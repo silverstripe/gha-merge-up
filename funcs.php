@@ -3,6 +3,7 @@
 function branches(
     string $defaultBranch,
     string $minimumCmsMajor,
+    string $githubRepository,
     // The following params are purely for unit testing, for the actual github action it will read json files instead
     string $composerJson = '',
     string $branchesJson = '',
@@ -28,7 +29,13 @@ function branches(
     }
     $defaultCmsMajor = '';
     $matchedOnBranchThreeLess = false;
-    $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/framework'} ?? '');
+    $version = '';
+    if ($githubRepository === 'silverstripe/developer-docs') {
+        $version = $defaultBranch;
+    }
+    if (!$version) {
+        $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/framework'} ?? '');
+    }
     if (!$version) {
         $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/cms'} ?? '');
     }
@@ -115,7 +122,8 @@ function branches(
             unset($branches[$i]);
             continue;
         }
-        if (isset($minorsWithStableTags[$major][$branch])) {
+        // for developer-docs which has no tags, pretend that every branch has a tag
+        if (isset($minorsWithStableTags[$major][$branch]) || $githubRepository === 'silverstripe/developer-docs') {
             $foundMinorBranchWithStableTag[$major] = true;
         }
         $foundMinorInMajor[$major] = true;
