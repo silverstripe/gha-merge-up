@@ -11,11 +11,19 @@ class BranchesTest extends TestCase
         array $expected,
         string $defaultBranch,
         string $minimumCmsMajor,
+        string $githubRepository,
         string $composerJson = '',
         string $branchesJson = '',
         string $tagsJson = ''
     ) {
-        $actual = branches($defaultBranch, $minimumCmsMajor, $composerJson, $branchesJson, $tagsJson);
+        $actual = branches(
+            $defaultBranch,
+            $minimumCmsMajor,
+            $githubRepository,
+            $composerJson,
+            $branchesJson,
+            $tagsJson
+        );
         $this->assertSame($expected, $actual);
     }
 
@@ -26,6 +34,7 @@ class BranchesTest extends TestCase
                 'expected' => ['4.13', '4', '5.0', '5.1', '5', '6'],
                 'defaultBranch' => '5',
                 'minimumCmsMajor' => '4',
+                'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
@@ -65,6 +74,7 @@ class BranchesTest extends TestCase
                 'expected' => ['4.13', '4', '5.1', '5'],
                 'defaultBranch' => '5',
                 'minimumCmsMajor' => '4',
+                'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
@@ -103,6 +113,7 @@ class BranchesTest extends TestCase
                 'expected' => ['4.13', '4', '5.1', '5'],
                 'defaultBranch' => '5',
                 'minimumCmsMajor' => '4',
+                'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
@@ -137,6 +148,7 @@ class BranchesTest extends TestCase
                 'expected' => ['4.13', '4', '5.1', '5'],
                 'defaultBranch' => '5',
                 'minimumCmsMajor' => '4',
+                'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
@@ -166,6 +178,7 @@ class BranchesTest extends TestCase
                 'expected' => ['1.13', '2.0', '2.1', '2'],
                 'defaultBranch' => '2',
                 'minimumCmsMajor' => '4',
+                'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
@@ -199,6 +212,7 @@ class BranchesTest extends TestCase
                 'expected' => ['1.13', '1', '2.1', '2.2', '2.3', '2'],
                 'defaultBranch' => '2',
                 'minimumCmsMajor' => '4',
+                'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
@@ -231,6 +245,7 @@ class BranchesTest extends TestCase
                 'expected' => ['5.9', '5', '6.0', '6', '7'],
                 'defaultBranch' => '5', // this repo has a `5` branch for CMS 4 and a '6' branch for CMS 5
                 'minimumCmsMajor' => '4',
+                'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
@@ -257,6 +272,28 @@ class BranchesTest extends TestCase
                     {"name": "4.0.1"}
                 ]
                 EOT,
+            ],
+            'developer-docs' => [
+                'expected' => ['4.13', '4', '5.0', '5'],
+                'defaultBranch' => '5',
+                'minimumCmsMajor' => '4',
+                'githubRepository' => 'silverstripe/developer-docs',
+                'composerJson' => <<<EOT
+                {
+                    "no-require": {}
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "5"},
+                    {"name": "5.0"},
+                    {"name": "4.13"},
+                    {"name": "4.12"},
+                    {"name": "4"},
+                    {"name": "3"}
+                ]
+                EOT,
+                'tagsJson' => '[]',
             ],
         ];
     }
