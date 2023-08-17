@@ -74,7 +74,7 @@ runs:
         # Download composer.json for use in branches.php
         curl -s -o __composer.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$DEFAULT_BRANCH/composer.json
 
-        BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH php ${{ github.action_path }}/branches.php)
+        BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH GITHUB_REPOSITORY=$GITHUB_REPOSITORY php ${{ github.action_path }}/branches.php)
         echo "BRANCHES is $BRANCHES"
         if [[ $BRANCHES =~ "^FAILURE \- (.+)$" ]]; then
           MESSAGE=${BASH_REMATCH[1]}
@@ -127,12 +127,6 @@ runs:
               exit 1
             fi
           done
-
-          # Don't allow merge-ups when there are JS changes that would require a yarn build
-          if [[ $(echo "$FILES" | grep client/dist) != "" ]]; then
-            echo "Unable to mergeup between $FROM_BRANCH and $INTO_BRANCH - there are changes to JS dist files"
-            exit 1
-          fi
         done
 
     # actions/checkout with fetch-depth: 0 will fetch ALL git history for the repository
@@ -146,6 +140,7 @@ runs:
       shell: bash
       env:
         BRANCHES: ${{ steps.determine.outputs.branches }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
         # Set git user to github-actions bot
         # The 41898282+ email prefixed is the required, matches the ID here
@@ -168,33 +163,176 @@ runs:
           git checkout $FROM_BRANCH
           git checkout $INTO_BRANCH
 
-          # Perform the merge-up
-          git merge --no-ff --no-commit $FROM_BRANCH
+          # Determine if we will rebuild dist file during merge-up
+          # This is based simply on if there are changes in the client/ directory
+          REBUILD=0
+          CLIENT_DIFF_FILES=$(git diff --name-only $INTO_BRANCH...$FROM_BRANCH | grep -P ^client/) || true
+          if [[ $CLIENT_DIFF_FILES != "" ]]; then
+            REBUILD=1
+          fi
+          echo "CLIENT_DIFF_FILES is:"
+          # The following line is quoted so that newlines show
+          echo "$CLIENT_DIFF_FILES"
+          echo "REBUILD is $REBUILD"
 
-          # Check for merge conflicts - this is just an additional check that is probably
-          # not required as git seems like it does the equivalent of exit 1 when it
-          # detects a merge conflict. Still it doesn't hurt to be extra cautious.
-          GIT_STATUS=$(git status)
-          if [[ "$GIT_STATUS" =~ 'Changes not staged for commit' ]]; then
+          # Perform the merge-up
+          # `|| true is suffixed to the command to prevent the job from stopping on merge conflict
+          # This is because git will sent a non-zero exit code when there is a merge conflict
+          # We often expect a merge-conflict when there are client/dist file differences
+          git merge --no-ff --no-commit $FROM_BRANCH || true
+
+          # Only merge conflicts in client/dist are allowed, stop for all others
+          # See https://git-scm.com/docs/git-status#_output for information on the porcelain format
+          UNMERGED_FILES=$(git status --porcelain=v1 | grep -P '^(DD|AU|UD|UA|DU|AA|UU)' | grep -v client/dist) || true
+          if [[ $UNMERGED_FILES != "" ]]; then
             echo "Merge conflict found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+            # The following line needs to be quoted so that line breaks show
+            echo "$UNMERGED_FILES"
             exit 1
           fi
 
-          # Check for any random files that shouldn't be committed
-          if [[ "$GIT_STATUS" =~ 'Untracked files' ]]; then
+          # Rebuild client/dist if needed
+          if [[ $REBUILD == 1 ]]; then
+
+            # Ensure .nvmrc is present
+            if ! [[ -f .nvmrc ]]; then
+              echo "Unable to find .nvmrc file"
+              exit 1
+            fi
+            # Piping into xargs trims out whitespace
+            NVM_VERSION=$(cat .nvmrc | xargs)
+            echo "NVM_VERSION is $NVM_VERSION"
+
+            # Ensure nvm is installed
+            if [[ $(which nvm) == "" ]]; then
+              wget -q -O __nvm_install.sh https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh
+              if [[ $(sha1sum __nvm_install.sh) != "c10365646e699a74e279e6ae71569430f82ba014  __nvm_install.sh" ]]; then
+                "Unable to verify integrity of nvm install script"
+                exit 1
+              fi
+              . __nvm_install.sh
+              rm __nvm_install.sh
+
+              # Load nvm without needing terminal restart
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            fi
+
+            # Install correct version of node and yarn
+            nvm install $NVM_VERSION
+            nvm use $NVM_VERSION
+            if [[ $(which yarn) == "" ]]; then
+              npm install -g yarn
+            fi
+
+            # Get composer name of the module
+            COMPOSER_NAME=$(jq -r ".name" composer.json)
+
+            # Install silverstripe/admin in sibling directory if needed so that shared components are available
+            if [[ $COMPOSER_NAME != silverstripe/admin ]]; then
+              DIR=$(pwd)
+
+              # Work out version of silverstripe/admin to checkout
+              cd ..
+              mkdir __tmp
+              cd __tmp
+              ADMIN_VERSION=$(COMPOSER_NAME=$COMPOSER_NAME INTO_BRANCH=$INTO_BRANCH php -r '
+                $COMPOSER_NAME = getenv("COMPOSER_NAME");
+                $INTO_BRANCH = getenv("INTO_BRANCH");
+                $json = [
+                  "require" => [
+                    "$COMPOSER_NAME" => "$INTO_BRANCH.x-dev",
+                    "silverstripe/recipe-kitchen-sink" => "*"
+                  ],
+                  "prefer-stable" => false,
+                  "minimum-stability" => "dev"
+                ];
+                file_put_contents("composer.json", json_encode($json, JSON_UNESCAPED_SLASHES));
+                shell_exec("composer update --no-install");
+                $lock = json_decode(file_get_contents("composer.lock"), true);
+                $version = array_values(array_filter(
+                  $lock["packages"],
+                  fn($p) => $p["name"] === "silverstripe/admin"
+                ))[0]["version"];
+                echo str_replace(".x-dev", "", $version);
+              ')
+              echo "ADMIN_VERSION is $ADMIN_VERSION"
+              if ! [[ $ADMIN_VERSION =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                echo "Unable to determine major or minor branch of silverstripe/admin version to checkout"
+                exit 1
+              fi
+              cd ..
+              rm -rf __tmp
+
+              # Install admin if required
+              if [[ ! -d admin ]]; then
+                git clone https://github.com/silverstripe/silverstripe-admin.git admin
+              fi
+
+              # Checkout admin version
+              cd admin
+              git checkout $ADMIN_VERSION
+              yarn install
+              cd $DIR
+            fi
+
+            # Rebuild dist files
+            yarn build
+
+            # Only add client files
+            git add client/dist
+          fi
+
+          # See https://git-scm.com/docs/git-status#_output for information on the porcelain format
+          GIT_STATUS=$(git status --porcelain=v1)
+
+          # Check for any unmerged files
+          UNMERGED_FILES=$(echo "$GIT_STATUS" | grep -P '^(DD|AU|UD|UA|DU|AA|UU)') || true
+          if [[ $UNMERGED_FILES != "" ]]; then
+            echo "Unmerged files found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+            echo "$UNMERGED_FILES"
+            exit 1
+          fi
+
+          # Check for any random untracked files that shouldn't be committed
+          UNTRACKED_FILES=$(echo "$GIT_STATUS" | grep -P '^\?') || true
+          if [[ $UNTRACKED_FILES != "" ]]; then
             echo "Untracked files found when merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+            echo "$UNTRACKED_FILES"
             exit 1
           fi
 
           # Continue if there's nothing to commit
-          if [[ "$GIT_STATUS" =~ 'nothing to commit, working tree clean' ]]; then
+          if [[ $GIT_STATUS == "" ]]; then
             echo "No changes found when merging-up $FROM_BRANCH into $INTO_BRANCH. Skipping."
             continue
           fi
 
           # Commit and push the merge-up
-          # --no-edit in the context of a merge commit uses the default auto-generated commit message.
-          git commit --no-edit
+          # The quotes in the commit message are intential and match the auto-generated
+          # title of e.g. Merge branch '2.0' into 2
+          # Using this instead of simply `git status --no-edit` which auto-generates a commit message because
+          # that includes commented out details of the merge conflict if there was one
+          git commit -m "Merge branch '$FROM_BRANCH' into $INTO_BRANCH"
           git push origin $INTO_BRANCH
           echo "Succesfully merged-up $FROM_BRANCH into $INTO_BRANCH"
+
+          # Trigger the CI workflow manually via GitHub API
+          # Do this because the ci.yml `push` event does not seem to be triggered by another workflow doing a push,
+          # instead it only seems to be triggered by a normal git user doing a push
+          # https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#create-a-workflow-dispatch-event
+          RESP_CODE=$(curl -w %{http_code} -s -L -o /dev/null \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ github.token }}"\
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/dispatches \
+            -d "{\"ref\":\"$INTO_BRANCH\"}"
+          )
+          if [[ $RESP_CODE != "204" ]]; then
+            echo "Failed to dispatch workflow - HTTP response code was $RESP_CODE"
+            exit 1
+          else
+            echo "Succesfully triggered CI workflow for $INTO_BRANCH"
+          fi
         done
