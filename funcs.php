@@ -131,6 +131,11 @@ function branches(
 
     // reverse the array so that oldest is first
     $branches = array_reverse($branches);
+
+    // max of 6 branches - also update action.yml if you need to increase this limit
+    if (count($branches) > 6) {
+        throw new Exception('More than 6 branches to merge up. Aborting.');
+    }
     
     return $branches;
 }
