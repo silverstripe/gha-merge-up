@@ -375,6 +375,32 @@ class BranchesTest extends TestCase
                 ]
                 EOT,
             ],
+            'gha-ci' => [
+                'expected' => ['1.4', '1'],
+                'defaultBranch' => '1',
+                'minimumCmsMajor' => '4',
+                'githubRepository' => 'silverstripe/gha-ci',
+                'composerJson' => '',
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "1"},
+                    {"name": "1.0"},
+                    {"name": "1.1"},
+                    {"name": "1.2"},
+                    {"name": "1.3"},
+                    {"name": "1.4"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "1.4.0"},
+                    {"name": "1.3.0"},
+                    {"name": "1.2.0"},
+                    {"name": "1.1.0"},
+                    {"name": "1.0.0"}
+                ]
+                EOT,
+            ],
         ];
     }
 }
