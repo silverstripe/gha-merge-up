@@ -1,5 +1,8 @@
 <?php
 
+// This should always match default branch of silverstripe/framework
+const CURRENT_CMS_MAJOR = 5;
+
 function branches(
     string $defaultBranch,
     string $minimumCmsMajor,
@@ -21,7 +24,20 @@ function branches(
     $defaultMajor = $matches[1];
     
     // read __composer.json of the current (default) branch
-    $contents = $composerJson ?: file_get_contents('__composer.json');
+    if ($composerJson) {
+        $contents = $composerJson;
+    } elseif (file_exists('__composer.json')) {
+        $contents = file_get_contents('__composer.json');
+    } else {
+        // respository such as silverstripe/eslint-config or silverstripe/gha-auto-tag
+        // make some fake json so that this branch is treated as though it's latest supported major version
+        $contents = json_encode([
+            'require' => [
+                'silverstripe/framework' => '^' . CURRENT_CMS_MAJOR,
+            ],
+        ], JSON_UNESCAPED_SLASHES);
+    }
+
     $json = json_decode($contents);
     if (is_null($json)) {
         $lastError = json_last_error();
@@ -45,6 +61,12 @@ function branches(
     if (!$version) {
         $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/assets'} ?? '');
         $matchedOnBranchThreeLess = true;
+    }
+    if (!$version) {
+        $version = preg_replace('#[^0-9\.]#', '', $json->require->{'cwp/starter-theme'} ?? '');
+        if ($version) {
+            $version += 1;
+        }
     }
     if (preg_match('#^([0-9]+)+\.?[0-9]*$#', $version, $matches)) {
         $defaultCmsMajor = $matches[1];

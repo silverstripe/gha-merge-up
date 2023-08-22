@@ -343,6 +343,64 @@ class BranchesTest extends TestCase
                 ]
                 EOT,
             ],
+            'cwp-watea-theme' => [
+                'expected' => ['3.2', '3', '4.0', '4'],
+                'defaultBranch' => '4',
+                'minimumCmsMajor' => '4',
+                'githubRepository' => 'lorem/ipsum',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "cwp/starter-theme": "^4"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "3"},
+                    {"name": "3.0"},
+                    {"name": "3.1"},
+                    {"name": "3.2"},
+                    {"name": "4"},
+                    {"name": "4.0"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "4.0.0"},
+                    {"name": "5.0.9"},
+                    {"name": "3.2.0"},
+                    {"name": "3.1.0"},
+                    {"name": "3.0.0"}
+                ]
+                EOT,
+            ],
+            'gha-ci' => [
+                'expected' => ['1.4', '1'],
+                'defaultBranch' => '1',
+                'minimumCmsMajor' => '4',
+                'githubRepository' => 'silverstripe/gha-ci',
+                'composerJson' => '',
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "1"},
+                    {"name": "1.0"},
+                    {"name": "1.1"},
+                    {"name": "1.2"},
+                    {"name": "1.3"},
+                    {"name": "1.4"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "1.4.0"},
+                    {"name": "1.3.0"},
+                    {"name": "1.2.0"},
+                    {"name": "1.1.0"},
+                    {"name": "1.0.0"}
+                ]
+                EOT,
+            ],
         ];
     }
 }
