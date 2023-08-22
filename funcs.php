@@ -46,6 +46,12 @@ function branches(
         $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/assets'} ?? '');
         $matchedOnBranchThreeLess = true;
     }
+    if (!$version) {
+        $version = preg_replace('#[^0-9\.]#', '', $json->require->{'cwp/starter-theme'} ?? '');
+        if ($version) {
+            $version += 1;
+        }
+    }
     if (preg_match('#^([0-9]+)+\.?[0-9]*$#', $version, $matches)) {
         $defaultCmsMajor = $matches[1];
         if ($matchedOnBranchThreeLess) {
