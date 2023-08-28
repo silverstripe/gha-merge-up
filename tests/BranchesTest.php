@@ -357,6 +357,10 @@ class BranchesTest extends TestCase
                 EOT,
                 'branchesJson' => <<<EOT
                 [
+                    {"name": "1"},
+                    {"name": "1.0"},
+                    {"name": "2"},
+                    {"name": "2.0"},
                     {"name": "3"},
                     {"name": "3.0"},
                     {"name": "3.1"},
