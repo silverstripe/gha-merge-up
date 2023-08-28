@@ -72,7 +72,10 @@ runs:
         fi
 
         # Download composer.json for use in branches.php
-        curl -s -o __composer.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$DEFAULT_BRANCH/composer.json
+        RESP_CODE=$(curl -w %{http_code} -s -o __composer.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$DEFAULT_BRANCH/composer.json)
+        if [[ $RESP_CODE != 200 ]]; then
+          rm __composer.json
+        fi
 
         BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH GITHUB_REPOSITORY=$GITHUB_REPOSITORY php ${{ github.action_path }}/branches.php)
         echo "BRANCHES is $BRANCHES"
@@ -88,7 +91,9 @@ runs:
         echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
         rm __tags.json
         rm __branches.json
-        rm __composer.json
+        if [[ -f __composer.json ]]; then
+          rm __composer.json
+        fi
 
         # Check to see if there is anything to merge-up using the GitHub API
         # Another approach is to see if we should merged using git, however that approach requires us to
