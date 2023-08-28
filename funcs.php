@@ -60,7 +60,9 @@ function branches(
     }
     if (!$version) {
         $version = preg_replace('#[^0-9\.]#', '', $json->require->{'silverstripe/assets'} ?? '');
-        $matchedOnBranchThreeLess = true;
+        if ($version) {
+            $matchedOnBranchThreeLess = true;
+        }
     }
     if (!$version) {
         $version = preg_replace('#[^0-9\.]#', '', $json->require->{'cwp/starter-theme'} ?? '');
