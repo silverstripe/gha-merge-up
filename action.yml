@@ -72,7 +72,10 @@ runs:
         fi
 
         # Download composer.json for use in branches.php
-        curl -s -o __composer.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$DEFAULT_BRANCH/composer.json
+        RESP_CODE=$(curl -w %{http_code} -s -o __composer.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$DEFAULT_BRANCH/composer.json)
+        if [[ $RESP_CODE != 200 ]]; then
+          rm __composer.json
+        fi
 
         BRANCHES=$(MINIMUM_CMS_MAJOR=$MINIMUM_CMS_MAJOR DEFAULT_BRANCH=$DEFAULT_BRANCH GITHUB_REPOSITORY=$GITHUB_REPOSITORY php ${{ github.action_path }}/branches.php)
         echo "BRANCHES is $BRANCHES"
@@ -88,7 +91,9 @@ runs:
         echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
         rm __tags.json
         rm __branches.json
-        rm __composer.json
+        if [[ -f __composer.json ]]; then
+          rm __composer.json
+        fi
 
         # Check to see if there is anything to merge-up using the GitHub API
         # Another approach is to see if we should merged using git, however that approach requires us to
@@ -119,14 +124,51 @@ runs:
           FILES=$(jq -r .files[].filename __compare.json)
           rm __compare.json
           
-          # Don't allow merge-ups when there are changes in dependency files
-          DEPENDENCY_FILES="composer.json package.json yarn.lock"
+          # Don't allow merge-ups when there are changes in javascript dependency files
+          DEPENDENCY_FILES="package.json yarn.lock"
           for DEPENDENCY_FILE in $DEPENDENCY_FILES; do
             if [[ $(echo "$FILES" | grep $DEPENDENCY_FILE) != "" ]]; then
-              echo "Unable to mergeup between $FROM_BRANCH and $INTO_BRANCH - there are changes in $DEPENDENCY_FILE"
+              echo "Unable to mergeup $FROM_BRANCH into $INTO_BRANCH - there are changes in $DEPENDENCY_FILE"
               exit 1
             fi
           done
+
+          # Don't allow merge-ups where the are changes composer.json, unless the only changes are in "require-dev"
+          if [[ $(echo "$FILES" | grep composer.json) != "" ]]; then
+            RESP_CODE=$(curl -w %{http_code} -s -o __composer_from.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$FROM_BRANCH/composer.json)
+            if [[ $RESP_CODE != 200 ]]; then
+              echo "Unable to download composer.json for branch $FROM_BRANCH - HTTP response code was $RESP_CODE"
+              exit 1
+            fi
+            RESP_CODE=$(curl -w %{http_code} -s -o __composer_into.json https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$INTO_BRANCH/composer.json)
+            if [[ $RESP_CODE != 200 ]]; then
+              echo "Unable to download composer.json for branch $INTO_BRANCH - HTTP response code was $RESP_CODE"
+              exit 1
+            fi
+            CAN_MERGE_UP_COMPOSER_JSON=$(php -r '
+              $from = json_decode(file_get_contents("__composer_from.json"), true);
+              $into = json_decode(file_get_contents("__composer_into.json"), true);
+              if (!$from) {
+                throw new Exception("Could not parse __composer_from.json - " . json_last_error_msg());
+              }
+              if (!$into) {
+                throw new Exception("Could not parse __composer_into.json - " . json_last_error_msg());
+              }
+              if (array_key_exists("require-dev", $from)) {
+                unset($from["require-dev"]);
+              }
+              if (array_key_exists("require-dev", $into)) {
+                unset($into["require-dev"]);
+              }
+              echo json_encode($from) === json_encode($into) ? "1" : "0";
+            ')
+            rm __composer_from.json
+            rm __composer_into.json
+            if [[ $CAN_MERGE_UP_COMPOSER_JSON == "0" ]]; then
+              echo "Unable to mergeup $FROM_BRANCH into $INTO_BRANCH - there are non require-dev changes in composer.json"
+              exit 1
+            fi
+          fi
         done
 
     # actions/checkout with fetch-depth: 0 will fetch ALL git history for the repository
@@ -137,6 +179,7 @@ runs:
         fetch-depth: 0
 
     - name: Git merge-up
+      id: git-merge-up
       shell: bash
       env:
         BRANCHES: ${{ steps.determine.outputs.branches }}
@@ -149,6 +192,19 @@ runs:
         git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions"
 
+        # List of branches to trigger-ci for later
+        # Normally we'll only ever trigger 3 branches, though providing up to 6 for scenarios
+        # where there is are things like betas in the mix
+        # branches.php will throw an Exception early if there is more than 6 branches which will cause
+        # this job to fail without any merge-ups being performed
+        TRIGGER_CI_BRANCH_01=""
+        TRIGGER_CI_BRANCH_02=""
+        TRIGGER_CI_BRANCH_03=""
+        TRIGGER_CI_BRANCH_04=""
+        TRIGGER_CI_BRANCH_05=""
+        TRIGGER_CI_BRANCH_06=""
+        TRIGGER_CI_EXCEEDED=""
+
         FROM_BRANCH=""
         INTO_BRANCH=""
         for BRANCH in $BRANCHES; do
@@ -160,8 +216,13 @@ runs:
           echo "Attempting to merge-up $FROM_BRANCH into $INTO_BRANCH"
 
           # Checkout both branches to ensure branch info is up to date
+          # Also runs `git pull` which should not be necessary, though in practice GitHub actions sometimes
+          # rejects when pushing saying the tip of the branch is out of date. This possibly only happens
+          # when running a failed job though that's still a valid scenario
           git checkout $FROM_BRANCH
+          git pull
           git checkout $INTO_BRANCH
+          git pull
 
           # Determine if we will rebuild dist file during merge-up
           # This is based simply on if there are changes in the client/ directory
@@ -317,22 +378,83 @@ runs:
           git push origin $INTO_BRANCH
           echo "Succesfully merged-up $FROM_BRANCH into $INTO_BRANCH"
 
-          # Trigger the CI workflow manually via GitHub API
-          # Do this because the ci.yml `push` event does not seem to be triggered by another workflow doing a push,
-          # instead it only seems to be triggered by a normal git user doing a push
-          # https://docs.github.com/en/rest/actions/workflows?apiVersion=2022-11-28#create-a-workflow-dispatch-event
-          RESP_CODE=$(curl -w %{http_code} -s -L -o /dev/null \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ github.token }}"\
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/dispatches \
-            -d "{\"ref\":\"$INTO_BRANCH\"}"
-          )
-          if [[ $RESP_CODE != "204" ]]; then
-            echo "Failed to dispatch workflow - HTTP response code was $RESP_CODE"
-            exit 1
+          if [[ $TRIGGER_CI_BRANCH_01 == "" ]]; then
+            TRIGGER_CI_BRANCH_01=$INTO_BRANCH
+          elif [[ $TRIGGER_CI_BRANCH_02 == "" ]]; then
+            TRIGGER_CI_BRANCH_02=$INTO_BRANCH
+          elif [[ $TRIGGER_CI_BRANCH_03 == "" ]]; then
+            TRIGGER_CI_BRANCH_03=$INTO_BRANCH
+          elif [[ $TRIGGER_CI_BRANCH_04 == "" ]]; then
+            TRIGGER_CI_BRANCH_04=$INTO_BRANCH
+          elif [[ $TRIGGER_CI_BRANCH_05 == "" ]]; then
+            TRIGGER_CI_BRANCH_05=$INTO_BRANCH
+          elif [[$TRIGGER_CI_BRANCH_06 == "" ]]; then
+            TRIGGER_CI_BRANCH_06=$INTO_BRANCH
           else
-            echo "Succesfully triggered CI workflow for $INTO_BRANCH"
+            if [[ $TRIGGER_CI_EXCEEDED == "" ]]; then
+              TRIGGER_CI_EXCEEDED=$INTO_BRANCH
+            else
+              TRIGGER_CI_EXCEEDED="$TRIGGER_CI_EXCEEDED,$INTO_BRANCH"
+            fi
           fi
         done
+        echo "TRIGGER_CI_BRANCH_01 is $TRIGGER_CI_BRANCH_01"
+        echo "TRIGGER_CI_BRANCH_02 is $TRIGGER_CI_BRANCH_02"
+        echo "TRIGGER_CI_BRANCH_03 is $TRIGGER_CI_BRANCH_03"
+        echo "TRIGGER_CI_BRANCH_04 is $TRIGGER_CI_BRANCH_04"
+        echo "TRIGGER_CI_BRANCH_05 is $TRIGGER_CI_BRANCH_05"
+        echo "TRIGGER_CI_BRANCH_06 is $TRIGGER_CI_BRANCH_06"
+        echo "TRIGGER_CI_EXCEEDED is $TRIGGER_CI_EXCEEDED"
+        echo "trigger_ci_branch_01=$TRIGGER_CI_BRANCH_01" >> $GITHUB_OUTPUT
+        echo "trigger_ci_branch_02=$TRIGGER_CI_BRANCH_02" >> $GITHUB_OUTPUT
+        echo "trigger_ci_branch_03=$TRIGGER_CI_BRANCH_03" >> $GITHUB_OUTPUT
+        echo "trigger_ci_branch_04=$TRIGGER_CI_BRANCH_04" >> $GITHUB_OUTPUT
+        echo "trigger_ci_branch_05=$TRIGGER_CI_BRANCH_05" >> $GITHUB_OUTPUT
+        echo "trigger_ci_branch_06=$TRIGGER_CI_BRANCH_06" >> $GITHUB_OUTPUT
+        echo "trigger_ci_exceeded=$TRIGGER_CI_EXCEEDED" >> $GITHUB_OUTPUT
+
+    - name: Trigger CI 01
+      if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_01 != '' }}
+      uses: silverstripe/gha-trigger-ci@v1
+      with:
+        branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_01 }}
+
+    - name: Trigger CI 02
+      if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_02 != '' }}
+      uses: silverstripe/gha-trigger-ci@v1
+      with:
+        branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_02 }}
+
+    - name: Trigger CI 03
+      if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_03 != '' }}
+      uses: silverstripe/gha-trigger-ci@v1
+      with:
+        branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_03 }}
+
+    - name: Trigger CI 04
+      if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_04 != '' }}
+      uses: silverstripe/gha-trigger-ci@v1
+      with:
+        branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_04 }}
+
+    - name: Trigger CI 05
+      if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_05 != '' }}
+      uses: silverstripe/gha-trigger-ci@v1
+      with:
+        branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_05 }}
+
+    - name: Trigger CI 06
+      if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_06 != '' }}
+      uses: silverstripe/gha-trigger-ci@v1
+      with:
+        branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_06 }}
+    
+    - name: Trigger CI Exceeded
+      if: ${{ steps.git-merge-up.outputs.trigger_ci_exceeded != '' }}
+      shell: bash
+      env:
+        TRIGGER_CI_EXCEEDED: ${{ steps.git-merge-up.outputs.trigger_ci_exceeded }}
+      run: |
+        echo "Exceeded the number of branches that can be have CI triggered"
+        echo "Branches where CI was not triggered is $TRIGGER_CI_EXCEEDED"
+        exit 1
