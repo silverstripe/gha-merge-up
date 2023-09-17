@@ -415,36 +415,42 @@ runs:
 
     - name: Trigger CI 01
       if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_01 != '' }}
+      continue-on-error: true
       uses: silverstripe/gha-trigger-ci@v1
       with:
         branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_01 }}
 
     - name: Trigger CI 02
       if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_02 != '' }}
+      continue-on-error: true
       uses: silverstripe/gha-trigger-ci@v1
       with:
         branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_02 }}
 
     - name: Trigger CI 03
       if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_03 != '' }}
+      continue-on-error: true
       uses: silverstripe/gha-trigger-ci@v1
       with:
         branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_03 }}
 
     - name: Trigger CI 04
       if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_04 != '' }}
+      continue-on-error: true
       uses: silverstripe/gha-trigger-ci@v1
       with:
         branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_04 }}
 
     - name: Trigger CI 05
       if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_05 != '' }}
+      continue-on-error: true
       uses: silverstripe/gha-trigger-ci@v1
       with:
         branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_05 }}
 
     - name: Trigger CI 06
       if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_06 != '' }}
+      continue-on-error: true
       uses: silverstripe/gha-trigger-ci@v1
       with:
         branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_06 }}
