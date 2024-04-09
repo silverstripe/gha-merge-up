@@ -3,6 +3,13 @@
 // This should always match default branch of silverstripe/framework
 const CURRENT_CMS_MAJOR = 5;
 
+// List of major branches to not merge up from
+// Add repos in here where the repo was previously unsupported
+// Note these are actual major branches, not CMS major versions
+const DO_NOT_MERGE_UP_FROM_MAJOR = [
+    'silverstripe/silverstripe-linkfield' => '3',
+];
+
 function branches(
     string $defaultBranch,
     string $minimumCmsMajor,
@@ -151,6 +158,14 @@ function branches(
             $foundMinorBranchWithStableTag[$major] = true;
         }
         $foundMinorInMajor[$major] = true;
+    }
+    
+    // remove any branches less than or equal to DO_NOT_MERGE_UP_FROM_MAJOR
+    if (isset(DO_NOT_MERGE_UP_FROM_MAJOR[$githubRepository])) {
+        $doNotMergeUpFromMajor = DO_NOT_MERGE_UP_FROM_MAJOR[$githubRepository];
+        $branches = array_filter($branches, function($branch) use ($doNotMergeUpFromMajor) {
+            return version_compare($branch, $doNotMergeUpFromMajor, '>');
+        });
     }
 
     // reverse the array so that oldest is first

@@ -405,6 +405,67 @@ class BranchesTest extends TestCase
                 ]
                 EOT,
             ],
+            'silverstripe-linkfield beta' => [
+                'expected' => ['4.0', '4', '5'],
+                'defaultBranch' => '4',
+                'minimumCmsMajor' => '4',
+                'githubRepository' => 'silverstripe/silverstripe-linkfield',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "silverstripe/framework": "^5"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "1"},
+                    {"name": "2"},
+                    {"name": "3"},
+                    {"name": "4"},
+                    {"name": "4.0"},
+                    {"name": "5"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "3.0.0-beta1"},
+                    {"name": "2.0.0"},
+                    {"name": "1.0.0"}
+                ]
+                EOT,
+            ],
+            'silverstripe-linkfield stable' => [
+                'expected' => ['4.0', '4', '5'],
+                'defaultBranch' => '4',
+                'minimumCmsMajor' => '4',
+                'githubRepository' => 'silverstripe/silverstripe-linkfield',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "silverstripe/framework": "^5"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "1"},
+                    {"name": "2"},
+                    {"name": "3"},
+                    {"name": "4"},
+                    {"name": "4.0"},
+                    {"name": "5"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "4.0.0"},
+                    {"name": "3.0.0"},
+                    {"name": "2.0.0"},
+                    {"name": "1.0.0"}
+                ]
+                EOT,
+            ],
         ];
     }
 }
