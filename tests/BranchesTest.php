@@ -452,6 +452,9 @@ class BranchesTest extends TestCase
                     {"name": "1"},
                     {"name": "2"},
                     {"name": "3"},
+                    {"name": "3.0"},
+                    {"name": "3.1"},
+                    {"name": "3.999"},
                     {"name": "4"},
                     {"name": "4.0"},
                     {"name": "5"}

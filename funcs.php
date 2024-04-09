@@ -164,7 +164,7 @@ function branches(
     if (isset(DO_NOT_MERGE_UP_FROM_MAJOR[$githubRepository])) {
         $doNotMergeUpFromMajor = DO_NOT_MERGE_UP_FROM_MAJOR[$githubRepository];
         $branches = array_filter($branches, function($branch) use ($doNotMergeUpFromMajor) {
-            return version_compare($branch, $doNotMergeUpFromMajor, '>');
+            return version_compare($branch, "$doNotMergeUpFromMajor.999999.999999", '>');
         });
     }
 
