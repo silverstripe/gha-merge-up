@@ -1,10 +1,16 @@
 <?php
 
+$autoloadPath = __DIR__ . '/vendor/autoload.php';
+if (!file_exists($autoloadPath)) {
+    throw new RuntimeException('Run composer install before this script');
+}
+
+require_once $autoloadPath;
+
 include 'funcs.php';
 
 $defaultBranch = getenv('DEFAULT_BRANCH');
-$minimumCmsMajor = getenv('MINIMUM_CMS_MAJOR');
 $githubRepository = getenv('GITHUB_REPOSITORY');
 
-$branches = branches($defaultBranch, $minimumCmsMajor, $githubRepository);
+$branches = branches($defaultBranch, $githubRepository);
 echo implode(' ', $branches);
