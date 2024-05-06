@@ -1,2 +1,5 @@
 *.json
+!composer.json
 .phpunit.result.cache
+vendor/
+composer.lock
