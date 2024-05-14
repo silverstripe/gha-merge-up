@@ -6,9 +6,18 @@ Merge-up supported branches in a repository
 
 **.github/workflows/merge-up.yml**
 ```yml
-steps:
-  - name: Merge-up
-    uses: silverstripe/gha-merge-up@v1
+
+permissions: {}
+
+jobs:
+  mergeup:
+    # ...
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Merge-up
+        uses: silverstripe/gha-merge-up@v1
 ```
 
 This action has no inputs
