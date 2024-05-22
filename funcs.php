@@ -32,7 +32,8 @@ function branches(
     $branches = BranchLogic::getBranchesForMergeUp($githubRepository, $repoMetaData, $defaultBranch, $allRepoTags, $allRepoBranches, $composerJson);
     // max of 6 branches - also update action.yml if you need to increase this limit
     if (count($branches) > 6) {
-        throw new Exception('More than 6 branches to merge up. Aborting.');
+        $branchesString = implode(', ', $branches);
+        throw new Exception("More than 6 branches to merge up: $branchesString. Aborting.");
     }
     return $branches;
 }
