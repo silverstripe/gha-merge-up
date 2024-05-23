@@ -239,10 +239,10 @@ runs:
           git pull
 
           # Determine if we will rebuild dist file during merge-up
-          # This is based simply on if there are changes in the client/ directory
+          # This is based simply on if there are changes in the client/ directory and if there's a package.json file
           REBUILD=0
           CLIENT_DIFF_FILES=$(git diff --name-only $INTO_BRANCH...$FROM_BRANCH | grep -P ^client/) || true
-          if [[ $CLIENT_DIFF_FILES != "" ]]; then
+          if [[ $CLIENT_DIFF_FILES != "" && -f "package.json" ]]; then
             REBUILD=1
           fi
           echo "CLIENT_DIFF_FILES is:"
