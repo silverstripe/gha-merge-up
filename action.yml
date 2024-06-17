@@ -235,8 +235,18 @@ runs:
           # when running a failed job though that's still a valid scenario
           git checkout $FROM_BRANCH
           git pull
+          FROM_BRANCH_SHA=$(git rev-parse HEAD)
+          echo "FROM_BRANCH $FROM_BRANCH sha is $FROM_BRANCH_SHA"
           git checkout $INTO_BRANCH
           git pull
+          INTO_BRANCH_SHA=$(git rev-parse HEAD)
+          echo "INTO_BRANCH $INTO_BRANCH sha is $INTO_BRANCH_SHA"
+
+          # If both branches are on the same sha, there's nothing to do
+          if [[ $FROM_BRANCH_SHA == $INTO_BRANCH_SHA ]]; then
+            echo "FROM_BRANCH $FROM_BRANCH and INTO_BRANCH $INTO_BRANCH have the same sha. Skipping."
+            continue
+          fi
 
           # Determine if we will rebuild dist file during merge-up
           # This is based simply on if there are changes in the client/ directory and if there's a package.json file
@@ -254,7 +264,7 @@ runs:
           # `|| true is suffixed to the command to prevent the job from stopping on merge conflict
           # This is because git will sent a non-zero exit code when there is a merge conflict
           # We often expect a merge-conflict when there are client/dist file differences
-          git merge --no-ff --no-commit $FROM_BRANCH || true
+          MERGE_RESULT=$(git merge --no-ff --no-commit $FROM_BRANCH || true)
 
           # Only merge conflicts in client/dist are allowed, stop for all others
           # See https://git-scm.com/docs/git-status#_output for information on the porcelain format
@@ -377,9 +387,9 @@ runs:
             exit 1
           fi
 
-          # Continue if there's nothing to commit
-          if [[ $GIT_STATUS == "" ]]; then
-            echo "No changes found when merging-up $FROM_BRANCH into $INTO_BRANCH. Skipping."
+          # Things are update to up to date, so do not commit
+          if [[ $MERGE_RESULT =~ "Already up to date" ]]; then
+            echo "Merge result said things are already up to date when merging-up $FROM_BRANCH into $INTO_BRANCH. Skipping."
             continue
           fi
 
