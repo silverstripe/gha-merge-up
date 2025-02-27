@@ -73,7 +73,7 @@ runs:
         fi
 
         # Gets 100 most recently created tags from GitHub API
-        # https://docs.github.com/en/rest/git/tags?apiVersion=2022-11-28
+        # https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repository-tags
         RESP_CODE=$(curl -w %{http_code} -s -o __tags.json \
         -X GET "https://api.github.com/repos/$GITHUB_REPOSITORY/tags?per_page=100" \
         -H "Accept: application/vnd.github+json" \
@@ -82,6 +82,25 @@ runs:
         )
         if [[ $RESP_CODE != "200" ]]; then
           echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+          exit 1
+        fi
+        # Parse the "link" header to see if there's a next page of tags
+        NEXT_LINK=$(curl -I -s \
+        -X HEAD "https://api.github.com/repos/$GITHUB_REPOSITORY/tags?per_page=100" \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${{ github.token }}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        | sed -n -E 's/link:.*<(.*?)>; rel="next".*/\1/p'
+        )
+        # Get the next 100 tags just in case (sometimes needed at the end of a major release line cycle)
+        RESP_CODE=$(curl -w %{http_code} -s -o __tags2.json \
+        -X GET "${NEXT_LINK}" \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${{ github.token }}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        )
+        if [[ $RESP_CODE != "200" ]]; then
+          echo "Unable to read second page of tags - HTTP response code was $RESP_CODE"
           exit 1
         fi
 
@@ -104,6 +123,9 @@ runs:
         fi
         echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
         rm __tags.json
+        if [[ -f __tags2.json ]]; then
+          rm __tags2.json
+        fi
         rm __branches.json
         if [[ -f __composer.json ]]; then
           rm __composer.json
