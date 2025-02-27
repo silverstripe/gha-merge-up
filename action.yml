@@ -207,9 +207,9 @@ runs:
         git config --local user.name "github-actions"
 
         # List of branches to trigger-ci for later
-        # Normally we'll only ever trigger 3 branches, though providing up to 6 for scenarios
+        # Normally we'll only ever trigger 3 branches, though providing up to 7 for scenarios
         # where there is are things like betas in the mix
-        # branches.php will throw an Exception early if there is more than 6 branches which will cause
+        # branches.php will throw an Exception early if there is more than 7 branches which will cause
         # this job to fail without any merge-ups being performed
         TRIGGER_CI_BRANCH_01=""
         TRIGGER_CI_BRANCH_02=""
@@ -217,6 +217,7 @@ runs:
         TRIGGER_CI_BRANCH_04=""
         TRIGGER_CI_BRANCH_05=""
         TRIGGER_CI_BRANCH_06=""
+        TRIGGER_CI_BRANCH_07=""
         TRIGGER_CI_EXCEEDED=""
 
         FROM_BRANCH=""
@@ -414,6 +415,8 @@ runs:
             TRIGGER_CI_BRANCH_05=$INTO_BRANCH
           elif [[$TRIGGER_CI_BRANCH_06 == "" ]]; then
             TRIGGER_CI_BRANCH_06=$INTO_BRANCH
+          elif [[$TRIGGER_CI_BRANCH_07 == "" ]]; then
+            TRIGGER_CI_BRANCH_07=$INTO_BRANCH
           else
             if [[ $TRIGGER_CI_EXCEEDED == "" ]]; then
               TRIGGER_CI_EXCEEDED=$INTO_BRANCH
@@ -428,6 +431,7 @@ runs:
         echo "TRIGGER_CI_BRANCH_04 is $TRIGGER_CI_BRANCH_04"
         echo "TRIGGER_CI_BRANCH_05 is $TRIGGER_CI_BRANCH_05"
         echo "TRIGGER_CI_BRANCH_06 is $TRIGGER_CI_BRANCH_06"
+        echo "TRIGGER_CI_BRANCH_07 is $TRIGGER_CI_BRANCH_07"
         echo "TRIGGER_CI_EXCEEDED is $TRIGGER_CI_EXCEEDED"
         echo "trigger_ci_branch_01=$TRIGGER_CI_BRANCH_01" >> $GITHUB_OUTPUT
         echo "trigger_ci_branch_02=$TRIGGER_CI_BRANCH_02" >> $GITHUB_OUTPUT
@@ -435,6 +439,7 @@ runs:
         echo "trigger_ci_branch_04=$TRIGGER_CI_BRANCH_04" >> $GITHUB_OUTPUT
         echo "trigger_ci_branch_05=$TRIGGER_CI_BRANCH_05" >> $GITHUB_OUTPUT
         echo "trigger_ci_branch_06=$TRIGGER_CI_BRANCH_06" >> $GITHUB_OUTPUT
+        echo "trigger_ci_branch_07=$TRIGGER_CI_BRANCH_07" >> $GITHUB_OUTPUT
         echo "trigger_ci_exceeded=$TRIGGER_CI_EXCEEDED" >> $GITHUB_OUTPUT
 
     - name: Trigger CI 01
@@ -472,6 +477,12 @@ runs:
       uses: silverstripe/gha-trigger-ci@v1
       with:
         branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_06 }}
+
+    - name: Trigger CI 07
+      if: ${{ steps.git-merge-up.outputs.trigger_ci_branch_07 != '' }}
+      uses: silverstripe/gha-trigger-ci@v1
+      with:
+        branch: ${{ steps.git-merge-up.outputs.trigger_ci_branch_07 }}
 
     - name: Trigger CI Exceeded
       if: ${{ steps.git-merge-up.outputs.trigger_ci_exceeded != '' }}

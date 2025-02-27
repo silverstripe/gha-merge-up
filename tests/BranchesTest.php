@@ -88,7 +88,54 @@ class BranchesTest extends TestCase
                 ]
                 EOT,
             ],
-            'More than 6 branches exception' => [
+            '6.0.0-alpha1 with all final CMS 4/5 branches on silverstripe/framework' => [
+                'expected' => ['4.13', '4', '5.3', '5.4', '5', '6.0', '6'],
+                'defaultBranch' => '5',
+                'githubRepository' => 'lorem/ipsum',
+                'composerJson' => <<<EOT
+                {
+                    "require": {
+                        "silverstripe/framework": "^5.4"
+                    }
+                }
+                EOT,
+                'branchesJson' => <<<EOT
+                [
+                    {"name": "3"},
+                    {"name": "3.6"},
+                    {"name": "3.7"},
+                    {"name": "4"},
+                    {"name": "4.10"},
+                    {"name": "4.11"},
+                    {"name": "4.12"},
+                    {"name": "4.13"},
+                    {"name": "5"},
+                    {"name": "5.0"},
+                    {"name": "5.1"},
+                    {"name": "5.2"},
+                    {"name": "5.3"},
+                    {"name": "5.4"},
+                    {"name": "6"},
+                    {"name": "6.0"}
+                ]
+                EOT,
+                'tagsJson' => <<<EOT
+                [
+                    {"name": "6.0.0-alpha1"},
+                    {"name": "5.4.0-beta1"},
+                    {"name": "5.3.0"},
+                    {"name": "5.2.0"},
+                    {"name": "5.1.0"},
+                    {"name": "5.0.9"},
+                    {"name": "4.13.11"},
+                    {"name": "4.12.11"},
+                    {"name": "4.11.11"},
+                    {"name": "4.10.11"},
+                    {"name": "3.7.4"}
+                ]
+                EOT,
+            ],
+            'More than 7 branches exception' => [
                 'expected' => ['__exception__'],
                 'defaultBranch' => '5',
                 'githubRepository' => 'lorem/ipsum',
@@ -113,11 +160,13 @@ class BranchesTest extends TestCase
                     {"name": "5.0"},
                     {"name": "5.1"},
                     {"name": "5.2"},
-                    {"name": "6"}
+                    {"name": "6"},
+                    {"name": "6.0"}
                 ]
                 EOT,
                 'tagsJson' => <<<EOT
                 [
+                    {"name": "6.0.0-alpha1"},
                     {"name": "5.2.0-beta1"},
                     {"name": "5.1.0-beta1"},
                     {"name": "5.0.9"},
