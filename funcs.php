@@ -27,6 +27,9 @@ function branches(
 
     $repoMetaData = MetaData::getMetaDataForRepository($githubRepository);
     $allRepoTags = array_map(fn($x) => $x->name, json_decode(file_get_contents('__tags.json')));
+    if (file_exists('__tags2.json')) {
+        $allRepoTags = array_merge($allRepoTags, array_map(fn($x) => $x->name, json_decode(file_get_contents('__tags2.json'))));
+    }
     $allRepoBranches = array_map(fn($x) => $x->name, json_decode(file_get_contents('__branches.json')));
 
     $branches = BranchLogic::getBranchesForMergeUp($githubRepository, $repoMetaData, $defaultBranch, $allRepoTags, $allRepoBranches, $composerJson);
