@@ -27,13 +27,16 @@ function branches(
 
     $repoMetaData = MetaData::getMetaDataForRepository($githubRepository);
     $allRepoTags = array_map(fn($x) => $x->name, json_decode(file_get_contents('__tags.json')));
+    if (file_exists('__tags2.json')) {
+        $allRepoTags = array_merge($allRepoTags, array_map(fn($x) => $x->name, json_decode(file_get_contents('__tags2.json'))));
+    }
     $allRepoBranches = array_map(fn($x) => $x->name, json_decode(file_get_contents('__branches.json')));
 
     $branches = BranchLogic::getBranchesForMergeUp($githubRepository, $repoMetaData, $defaultBranch, $allRepoTags, $allRepoBranches, $composerJson);
-    // max of 6 branches - also update action.yml if you need to increase this limit
-    if (count($branches) > 6) {
+    // max of 7 branches - also update action.yml if you need to increase this limit
+    if (count($branches) > 7) {
         $branchesString = implode(', ', $branches);
-        throw new Exception("More than 6 branches to merge up: $branchesString. Aborting.");
+        throw new Exception("More than 7 branches to merge up: $branchesString. Aborting.");
     }
     return $branches;
 }
