@@ -1,6 +1,7 @@
 <?php
 
 use PHPUnit\Framework\TestCase;
+use SilverStripe\SupportedModules\MetaData;
 
 class BranchesTest extends TestCase
 {
@@ -45,136 +46,140 @@ class BranchesTest extends TestCase
 
     public function provideBranches()
     {
+        $lowestMajor = MetaData::LOWEST_SUPPORTED_CMS_MAJOR;
+        $highestMajor = MetaData::HIGHEST_STABLE_CMS_MAJOR;
+        $EOLMajor = (string)($lowestMajor - 1);
+        $nextMajor = (string)($highestMajor + 1);
         // Note: Most scenarios are tested upstream in the supported-modules repo.
         // We just need to check here that we're passing stuff through in an expected way
         // and any logic/exception unique to this repo
         return [
-            '5.1.0-beta1, CMS 6 branch detected on silverstripe/framework' => [
-                'expected' => ['4.13', '4', '5.0', '5.1', '5', '6'],
-                'defaultBranch' => '5',
+            'highest major beta, next major branch detected on silverstripe/framework' => [
+                'expected' => [$lowestMajor . '.13', $lowestMajor, $highestMajor . '.0', $highestMajor . '.1', $highestMajor, $nextMajor],
+                'defaultBranch' => $highestMajor,
                 'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
-                        "silverstripe/framework": "^5.0"
+                        "silverstripe/framework": "^$highestMajor.0"
                     }
                 }
                 EOT,
                 'branchesJson' => <<<EOT
                 [
-                    {"name": "3"},
-                    {"name": "3.6"},
-                    {"name": "3.7"},
-                    {"name": "4"},
-                    {"name": "4.10"},
-                    {"name": "4.11"},
-                    {"name": "4.12"},
-                    {"name": "4.13"},
-                    {"name": "5"},
-                    {"name": "5.0"},
-                    {"name": "5.1"},
-                    {"name": "6"}
+                    {"name": "$EOLMajor"},
+                    {"name": "$EOLMajor.6"},
+                    {"name": "$EOLMajor.7"},
+                    {"name": "$lowestMajor"},
+                    {"name": "$lowestMajor.10"},
+                    {"name": "$lowestMajor.11"},
+                    {"name": "$lowestMajor.12"},
+                    {"name": "$lowestMajor.13"},
+                    {"name": "$highestMajor"},
+                    {"name": "$highestMajor.0"},
+                    {"name": "$highestMajor.1"},
+                    {"name": "$nextMajor"}
                 ]
                 EOT,
                 'tagsJson' => <<<EOT
                 [
-                    {"name": "5.1.0-beta1"},
-                    {"name": "5.0.9"},
-                    {"name": "4.13.11"},
-                    {"name": "4.12.11"},
-                    {"name": "4.11.11"},
-                    {"name": "4.10.11"},
-                    {"name": "3.7.4"}
+                    {"name": "$highestMajor.1.0-beta1"},
+                    {"name": "$highestMajor.0.9"},
+                    {"name": "$lowestMajor.13.11"},
+                    {"name": "$lowestMajor.12.11"},
+                    {"name": "$lowestMajor.11.11"},
+                    {"name": "$lowestMajor.10.11"},
+                    {"name": "$EOLMajor.7.4"}
                 ]
                 EOT,
             ],
-            '6.0.0-alpha1 with all final CMS 4/5 branches on silverstripe/framework' => [
-                'expected' => ['4.13', '4', '5.3', '5.4', '5', '6.0', '6'],
-                'defaultBranch' => '5',
+            'next major alpha with all final CMS supported branches on silverstripe/framework' => [
+                'expected' => [$lowestMajor . '.13', $lowestMajor, $highestMajor . '.3', $highestMajor . '.4', $highestMajor, $nextMajor . '.0', $nextMajor],
+                'defaultBranch' => $highestMajor,
                 'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
-                        "silverstripe/framework": "^5.4"
+                        "silverstripe/framework": "^$highestMajor.4"
                     }
                 }
                 EOT,
                 'branchesJson' => <<<EOT
                 [
-                    {"name": "3"},
-                    {"name": "3.6"},
-                    {"name": "3.7"},
-                    {"name": "4"},
-                    {"name": "4.10"},
-                    {"name": "4.11"},
-                    {"name": "4.12"},
-                    {"name": "4.13"},
-                    {"name": "5"},
-                    {"name": "5.0"},
-                    {"name": "5.1"},
-                    {"name": "5.2"},
-                    {"name": "5.3"},
-                    {"name": "5.4"},
-                    {"name": "6"},
-                    {"name": "6.0"}
+                    {"name": "$EOLMajor"},
+                    {"name": "$EOLMajor.6"},
+                    {"name": "$EOLMajor.7"},
+                    {"name": "$lowestMajor"},
+                    {"name": "$lowestMajor.10"},
+                    {"name": "$lowestMajor.11"},
+                    {"name": "$lowestMajor.12"},
+                    {"name": "$lowestMajor.13"},
+                    {"name": "$highestMajor"},
+                    {"name": "$highestMajor.0"},
+                    {"name": "$highestMajor.1"},
+                    {"name": "$highestMajor.2"},
+                    {"name": "$highestMajor.3"},
+                    {"name": "$highestMajor.4"},
+                    {"name": "$nextMajor"},
+                    {"name": "$nextMajor.0"}
                 ]
                 EOT,
                 'tagsJson' => <<<EOT
                 [
-                    {"name": "6.0.0-alpha1"},
-                    {"name": "5.4.0-beta1"},
-                    {"name": "5.3.0"},
-                    {"name": "5.2.0"},
-                    {"name": "5.1.0"},
-                    {"name": "5.0.9"},
-                    {"name": "4.13.11"},
-                    {"name": "4.12.11"},
-                    {"name": "4.11.11"},
-                    {"name": "4.10.11"},
-                    {"name": "3.7.4"}
+                    {"name": "$nextMajor.0.0-alpha1"},
+                    {"name": "$highestMajor.4.0-beta1"},
+                    {"name": "$highestMajor.3.0"},
+                    {"name": "$highestMajor.2.0"},
+                    {"name": "$highestMajor.1.0"},
+                    {"name": "$highestMajor.0.9"},
+                    {"name": "$lowestMajor.13.11"},
+                    {"name": "$lowestMajor.12.11"},
+                    {"name": "$lowestMajor.11.11"},
+                    {"name": "$lowestMajor.10.11"},
+                    {"name": "$EOLMajor.7.4"}
                 ]
                 EOT,
             ],
             'More than 7 branches exception' => [
                 'expected' => ['__exception__'],
-                'defaultBranch' => '5',
+                'defaultBranch' => $highestMajor,
                 'githubRepository' => 'lorem/ipsum',
                 'composerJson' => <<<EOT
                 {
                     "require": {
-                        "silverstripe/framework": "^5.0"
+                        "silverstripe/framework": "^$highestMajor.0"
                     }
                 }
                 EOT,
                 'branchesJson' => <<<EOT
                 [
-                    {"name": "3"},
-                    {"name": "3.6"},
-                    {"name": "3.7"},
-                    {"name": "4"},
-                    {"name": "4.10"},
-                    {"name": "4.11"},
-                    {"name": "4.12"},
-                    {"name": "4.13"},
-                    {"name": "5"},
-                    {"name": "5.0"},
-                    {"name": "5.1"},
-                    {"name": "5.2"},
-                    {"name": "6"},
-                    {"name": "6.0"}
+                    {"name": "$EOLMajor"},
+                    {"name": "$EOLMajor.6"},
+                    {"name": "$EOLMajor.7"},
+                    {"name": "$lowestMajor"},
+                    {"name": "$lowestMajor.10"},
+                    {"name": "$lowestMajor.11"},
+                    {"name": "$lowestMajor.12"},
+                    {"name": "$lowestMajor.13"},
+                    {"name": "$highestMajor"},
+                    {"name": "$highestMajor.0"},
+                    {"name": "$highestMajor.1"},
+                    {"name": "$highestMajor.2"},
+                    {"name": "$nextMajor"},
+                    {"name": "$nextMajor.0"}
                 ]
                 EOT,
                 'tagsJson' => <<<EOT
                 [
-                    {"name": "6.0.0-alpha1"},
-                    {"name": "5.2.0-beta1"},
-                    {"name": "5.1.0-beta1"},
-                    {"name": "5.0.9"},
-                    {"name": "4.13.11"},
-                    {"name": "4.12.11"},
-                    {"name": "4.11.11"},
-                    {"name": "4.10.11"},
-                    {"name": "3.7.4"}
+                    {"name": "$nextMajor.0.0-alpha1"},
+                    {"name": "$highestMajor.2.0-beta1"},
+                    {"name": "$highestMajor.1.0-beta1"},
+                    {"name": "$highestMajor.0.9"},
+                    {"name": "$lowestMajor.13.11"},
+                    {"name": "$lowestMajor.12.11"},
+                    {"name": "$lowestMajor.11.11"},
+                    {"name": "$lowestMajor.10.11"},
+                    {"name": "$EOLMajor.7.4"}
                 ]
                 EOT,
             ],
