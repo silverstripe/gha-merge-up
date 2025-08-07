@@ -254,6 +254,19 @@ runs:
           fi
           echo "Attempting to merge-up $FROM_BRANCH into $INTO_BRANCH"
 
+          # Determine if this is a major merge-up (e.g. from 4 to 5.0)
+          IS_MAJOR_MERGE=0
+          [[ $FROM_BRANCH =~ ^([0-9]+)(\..+)?$ ]]
+          FROM_MAJOR=${BASH_REMATCH[1]}
+          [[ $INTO_BRANCH =~ ^([0-9]+)(\..+)?$ ]]
+          INTO_MAJOR=${BASH_REMATCH[1]}
+          MERGE_UP_TYPE="minor"
+          if [[ $FROM_MAJOR != $INTO_MAJOR ]]; then
+            IS_MAJOR_MERGE=1
+            MERGE_UP_TYPE="major"
+          fi
+          echo "This is a $MERGE_UP_TYPE merge-up from $FROM_BRANCH (major $FROM_MAJOR) to $INTO_BRANCH (major $INTO_MAJOR)"
+
           # Checkout both branches to ensure branch info is up to date
           # Also runs `git pull` which should not be necessary, though in practice GitHub actions sometimes
           # rejects when pushing saying the tip of the branch is out of date. This possibly only happens
@@ -299,6 +312,22 @@ runs:
             # The following line needs to be quoted so that line breaks show
             echo "$UNMERGED_FILES"
             exit 1
+          fi
+
+          # Check for deprecated code in php files and halt the merge-up if it is between majors and
+          # any deprecated code is found
+          if [[ $IS_MAJOR_MERGE == 1 ]]; then
+            DEPRECATED_CODE=$( \
+              git diff --cached --name-only \
+              | grep .php \
+              | xargs grep --with-filename --line-number --color=always \
+                --extended-regexp 'SilverStripe\\Dev\\Deprecation|Deprecation::|@deprecated' \
+            )
+            if [[ $DEPRECATED_CODE != "" ]]; then
+              echo "Deprecated code detected. Resolve this before merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+              echo "$DEPRECATED_CODE"
+              exit 1
+            fi
           fi
 
           # Rebuild client/dist if needed
