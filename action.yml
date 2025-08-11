@@ -317,18 +317,16 @@ runs:
           # Check for deprecated code in php files and halt the merge-up if it is between majors and
           # any deprecated code is found
           if [[ $IS_MAJOR_MERGE == 1 ]]; then
-            DIFF_FILES_PHP=$(git diff --cached --name-only | grep .php)
-            # It's important to check DIFF_FILES_PHP is non-empty before passing into xargs grep
-            # otherwise it will emit an exit code of 123 which will break the job
-            if [[ "$DIFF_FILES_PHP" != "" ]]; then
-              DEPRECATED_CODE=$(echo "$DIFF_FILES_PHP" | xargs grep --with-filename --line-number --color=always \
+            DEPRECATED_CODE=$( \
+              git diff --cached --name-only \
+              | grep .php \
+              | xargs grep --with-filename --line-number --color=always \
                 --extended-regexp 'SilverStripe\\Dev\\Deprecation|Deprecation::|@deprecated' \
-              )
-              if [[ $DEPRECATED_CODE != "" ]]; then
-                echo "Deprecated code detected. Resolve this before merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
-                echo "$DEPRECATED_CODE"
-                exit 1
-              fi
+            ) || true
+            if [[ $DEPRECATED_CODE != "" ]]; then
+              echo "Deprecated code detected. Resolve this before merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
+              echo "$DEPRECATED_CODE"
+              exit 1
             fi
           fi
 
