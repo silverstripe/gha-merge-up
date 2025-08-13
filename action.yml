@@ -322,7 +322,7 @@ runs:
               | grep .php \
               | xargs grep --with-filename --line-number --color=always \
                 --extended-regexp 'SilverStripe\\Dev\\Deprecation|Deprecation::|@deprecated' \
-            )
+            ) || true
             if [[ $DEPRECATED_CODE != "" ]]; then
               echo "Deprecated code detected. Resolve this before merging-up $FROM_BRANCH into $INTO_BRANCH. Aborting."
               echo "$DEPRECATED_CODE"
