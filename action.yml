@@ -162,8 +162,11 @@ runs:
           FILES=$(jq -r .files[].filename __compare.json)
           rm __compare.json
 
-          # Don't allow merge-ups when there are changes in javascript dependency files
-          DEPENDENCY_FILES="package.json yarn.lock"
+          # Don't allow merge-ups when there are changes in javascript dependency files (e.g. package.json)
+          # Note that yarn.lock is allowed to merge-up between minors only (not majors)
+          # Its presence in a git diff will force a yarn build (assuming no merge-conflicts)
+          # There is a check in a later step if it's a minor or major merge-up
+          DEPENDENCY_FILES="package.json"
           for DEPENDENCY_FILE in $DEPENDENCY_FILES; do
             if [[ $(echo "$FILES" | grep $DEPENDENCY_FILE) != "" ]]; then
               echo "Unable to mergeup $FROM_BRANCH into $INTO_BRANCH - there are changes in $DEPENDENCY_FILE"
@@ -287,15 +290,28 @@ runs:
           fi
 
           # Determine if we will rebuild dist file during merge-up
-          # This is based simply on if there are changes in the client/ directory and if there's a package.json file
+          # This is based on:
+          # - if there are changes in the client/ directory and if there's a package.json file, OR
+          # - if there are changes in yarn.lock, though this is only allowed for minor-merge-ups
           REBUILD=0
           CLIENT_DIFF_FILES=$(git diff --name-only $INTO_BRANCH...$FROM_BRANCH | grep -P ^client/) || true
-          if [[ $CLIENT_DIFF_FILES != "" && -f "package.json" ]]; then
-            REBUILD=1
-          fi
           echo "CLIENT_DIFF_FILES is:"
           # The following line is quoted so that newlines show
           echo "$CLIENT_DIFF_FILES"
+          if [[ $CLIENT_DIFF_FILES != "" && -f "package.json" ]]; then
+            REBUILD=1
+          fi
+          YARN_LOCK_DIFF=$(git diff --name-only $INTO_BRANCH...$FROM_BRANCH | grep -P ^yarn\.lock$) || true
+          echo "YARN_LOCK_DIFF is $YARN_LOCK_DIFF"
+          if [[ $YARN_LOCK_DIFF != "" ]]; then
+            if [[ $MERGE_UP_TYPE == "major" ]]; then
+              echo "Changes in yarn.lock detected when doing major merge up from $FROM_BRANCH into $INTO_BRANCH. Aborting."
+              exit 1
+            else
+              # Minor merge-up allows changes in yarn.lock, though there needs to be a rebuild
+              REBUILD=1
+            fi
+          fi
           echo "REBUILD is $REBUILD"
 
           # Perform the merge-up
@@ -304,7 +320,7 @@ runs:
           # We often expect a merge-conflict when there are client/dist file differences
           MERGE_RESULT=$(git merge --no-ff --no-commit $FROM_BRANCH || true)
 
-          # Only merge conflicts in client/dist are allowed, stop for all others
+          # Only merge conflicts in client/dist are allowed, stop for all others, including yarn.lock
           # See https://git-scm.com/docs/git-status#_output for information on the porcelain format
           UNMERGED_FILES=$(git status --porcelain=v1 | grep -P '^(DD|AU|UD|UA|DU|AA|UU)' | grep -v client/dist) || true
           if [[ $UNMERGED_FILES != "" ]]; then
@@ -415,7 +431,11 @@ runs:
               cd $DIR
             fi
 
-            # Rebuild dist files
+            # Rebuild dist files.
+            # Note that `yarn install` probably isn't required as the `build` script in package.json
+            # for every module should include `yarn &&` which will do `yarn install`, though we include
+            # it here just to be extra sure
+            yarn install
             yarn build
 
             # Only add client files
