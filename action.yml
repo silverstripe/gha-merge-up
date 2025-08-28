@@ -434,8 +434,12 @@ runs:
             yarn install
             yarn build
 
-            # Only add client files
+            # Only add client files and yarn.lock so that any other unmerged
+            # files are detected later and the job will fail
+            # Note that adding yarn.lock when it has no changes is safe and
+            # will not result in an error i.e. `echo $?` be "0"
             git add client/dist
+            git add yarn.lock
           fi
 
           # See https://git-scm.com/docs/git-status#_output for information on the porcelain format
