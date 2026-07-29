@@ -370,7 +370,7 @@ runs:
             nvm install $NVM_VERSION
             nvm use $NVM_VERSION
             if [[ $(which yarn) == "" ]]; then
-              npm install -g yarn
+              npm install --ignore-scripts -g yarn
             fi
 
             # Get composer name of the module
@@ -420,7 +420,7 @@ runs:
               # Checkout admin version
               cd admin
               git checkout $ADMIN_VERSION
-              yarn install
+              yarn install --ignore-scripts
               cd $DIR
             fi
 
@@ -431,7 +431,7 @@ runs:
             # Note that `yarn install` probably isn't required as the `build` script in package.json
             # for every module should include `yarn &&` which will do `yarn install`, though we include
             # it here just to be extra sure
-            yarn install
+            yarn install --ignore-scripts
             yarn build
 
             # Only add client files and yarn.lock so that any other unmerged
