@@ -28,12 +28,106 @@ runs:
         composer install
         cd -
 
+    # The framework tag and module map logic below is intentionally duplicated from
+    # gha-dispatch-ci rather than shared, so the support logic can be compared side by side
+    - name: Fetch supported modules
+      shell: bash
+      run: |
+        RESP_CODE=$(curl -w %{http_code} -s -L -o __repositories.json \
+          https://raw.githubusercontent.com/silverstripe/supported-modules/refs/heads/main/repositories.json
+        )
+        if [[ $RESP_CODE != "200" ]]; then
+          echo "Failed to fetch repositories.json - HTTP response code was $RESP_CODE"
+          cat __repositories.json
+          exit 1
+        fi
+
+    - name: Fetch framework tags
+      shell: bash
+      run: |
+        # Gets 200 most recently created framework tags from GitHub API
+        # https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repository-tags
+        RESP_CODE=$(curl -w %{http_code} -s -o __framework_tags.json \
+          -X GET "https://api.github.com/repos/silverstripe/silverstripe-framework/tags?per_page=100" \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${{ github.token }}" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+        )
+        if [[ $RESP_CODE != "200" ]]; then
+          echo "Unable to read list of tags - HTTP response code was $RESP_CODE"
+          cat __framework_tags.json
+          exit 1
+        fi
+        # Parse the "link" HTTP header to see if there's a next page of tags
+        NEXT_LINK=$(curl -I -s \
+          -X HEAD "https://api.github.com/repos/silverstripe/silverstripe-framework/tags?per_page=100" \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${{ github.token }}" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          | sed -n -E 's/link:.*<(.*?)>; rel="next".*/\1/p'
+        )
+        if [[ $NEXT_LINK != "" ]]; then
+          # Get the next 100 tags just in case (sometimes needed at the end of a major release line cycle)
+          RESP_CODE=$(curl -w %{http_code} -s -o __framework_tags2.json \
+            -X GET "${NEXT_LINK}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+          )
+          if [[ $RESP_CODE != "200" ]]; then
+            echo "Unable to read second page of tags - HTTP response code was $RESP_CODE"
+            cat __framework_tags2.json
+            exit 1
+          fi
+          # Combine the two json files
+          jq -s '.[0] + .[1]' __framework_tags.json __framework_tags2.json > __framework_tags3.json
+          rm __framework_tags.json
+          rm __framework_tags2.json
+          mv __framework_tags3.json __framework_tags.json
+        fi
+
+    - name: Derive framework status
+      id: frameworkstatus
+      shell: bash
+      run: |
+        # Get the highest currently supported framework major version
+        FRAMEWORK_HIGHEST_MAJOR=$(jq -r '.supportedModules[] | select(.packagist == "silverstripe/framework") | .majorVersionMapping | keys[]' __repositories.json | tail -n 1)
+        echo "FRAMEWORK_HIGHEST_MAJOR is $FRAMEWORK_HIGHEST_MAJOR"
+        # Check if there is y.2.0 tag for the current supported major version of framework
+        FRAMEWORK_TWO_TAG_EXISTS=0
+        TWO_TAG=$(jq -r --arg framework_highest_major "$FRAMEWORK_HIGHEST_MAJOR" '.[] | select(.name == $framework_highest_major + ".2.0")' __framework_tags.json)
+        rm __framework_tags.json
+        if [[ $TWO_TAG != "" ]]; then
+          FRAMEWORK_TWO_TAG_EXISTS=1
+        fi
+        echo "FRAMEWORK_TWO_TAG_EXISTS is $FRAMEWORK_TWO_TAG_EXISTS"
+        echo "framework_highest_major=$FRAMEWORK_HIGHEST_MAJOR" >> "$GITHUB_OUTPUT"
+        echo "framework_two_tag_exists=$FRAMEWORK_TWO_TAG_EXISTS" >> "$GITHUB_OUTPUT"
+
+    - name: Derive module map
+      id: modulemap
+      shell: bash
+      env:
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        # Create a module map of { module_major: cms_version }
+        # e.g. for silverstripe/admin it will be { "1": "4", "2": "5", "3": "6" }
+        # Note that unlike gha-dispatch-ci this includes .misc, because merge-up also runs on
+        # repositories in that category
+        MODULE_MAP=$(jq -r -c --arg github_repository "$GITHUB_REPOSITORY" '(.supportedModules + .misc)[] | select(.github == $github_repository) | .majorVersionMapping | to_entries | map({key: .value[0], value: .key}) | from_entries' __repositories.json)
+        rm __repositories.json
+        echo "MODULE_MAP is $MODULE_MAP"
+        echo "module_map=$MODULE_MAP" >> $GITHUB_OUTPUT
+
     - name: Determine if should merge-up
       id: determine
       shell: bash
       env:
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_REF_NAME: ${{ github.ref_name }}
+        FRAMEWORK_HIGHEST_MAJOR: ${{ steps.frameworkstatus.outputs.framework_highest_major }}
+        FRAMEWORK_TWO_TAG_EXISTS: ${{ steps.frameworkstatus.outputs.framework_two_tag_exists }}
+        MODULE_MAP: ${{ steps.modulemap.outputs.module_map }}
       run: |
         # Get the default branch from GitHub API
         # We need to make an API call rather than just assume that the current branch is the default
@@ -123,6 +217,32 @@ runs:
           echo "No branches to merge-up"
           exit 0
         fi
+
+        # Remove branches for CMS major release lines which are no longer in full support
+        # Those branches only receive security fixes, which are merged up manually
+        SUPPORTED_BRANCHES=""
+        for BRANCH in $BRANCHES; do
+          BRANCH_MAJOR=$(echo "$BRANCH" | cut -d'.' -f1)
+          CMS_MAJOR=$(echo "$MODULE_MAP" | jq -r --arg branch_major "$BRANCH_MAJOR" '.[$branch_major] // ""')
+          if [[ $CMS_MAJOR == "" ]]; then
+            # Keep branches we cannot map to a CMS major e.g. repositories without meta-data
+            SUPPORTED_BRANCHES="$SUPPORTED_BRANCHES $BRANCH"
+          elif (( $CMS_MAJOR >= $FRAMEWORK_HIGHEST_MAJOR )); then
+            SUPPORTED_BRANCHES="$SUPPORTED_BRANCHES $BRANCH"
+          elif (( $CMS_MAJOR == $FRAMEWORK_HIGHEST_MAJOR - 1 )) && [[ $FRAMEWORK_TWO_TAG_EXISTS == "0" ]]; then
+            # The previous major leaves full support when the current major gets its x.2.0 release
+            SUPPORTED_BRANCHES="$SUPPORTED_BRANCHES $BRANCH"
+          else
+            echo "Branch $BRANCH is for CMS $CMS_MAJOR which is no longer in full support, it will not be merged up"
+          fi
+        done
+        BRANCHES=$(echo $SUPPORTED_BRANCHES)
+        echo "Supported BRANCHES is $BRANCHES"
+        if [[ $BRANCHES == "" ]]; then
+          echo "No branches to merge-up"
+          exit 0
+        fi
+
         echo "branches=$BRANCHES" >> $GITHUB_OUTPUT
         rm __tags.json
         if [[ -f __tags2.json ]]; then
@@ -224,6 +344,13 @@ runs:
       env:
         BRANCHES: ${{ steps.determine.outputs.branches }}
         GITHUB_REPOSITORY: ${{ github.repository }}
+        # Auto-approve corepack's yarn download
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+        # Overrides .yarnrc.yml so scripts stay disabled - this action pushes builds directly to branches
+        YARN_ENABLE_SCRIPTS: "false"
+        # Limit concurrent npm requests to avoid rate limiting in CI - modules do not
+        # set networkConcurrency in .yarnrc.yml so local installs stay fast
+        YARN_NETWORK_CONCURRENCY: "1"
       run: |
         # Set git user to github-actions bot
         # The 41898282+ email prefixed is the required, matches the ID here
@@ -369,9 +496,13 @@ runs:
             # Install correct version of node and yarn
             nvm install $NVM_VERSION
             nvm use $NVM_VERSION
-            if [[ $(which yarn) == "" ]]; then
-              npm install --ignore-scripts -g yarn
+            if [[ $(jq -r '.packageManager // empty' package.json) != yarn@4.* ]]; then
+              echo "package.json on branch $INTO_BRANCH must declare \"packageManager\": \"yarn@4.x.y\" - this action only supports yarn 4 via corepack"
+              exit 1
             fi
+            # corepack is bundled with node 18 and provisions the yarn version declared in packageManager.
+            # Node 25+ does not bundle corepack - if node is bumped past 24, add npm install -g corepack first.
+            corepack enable
 
             # Get composer name of the module
             COMPOSER_NAME=$(jq -r ".name" composer.json)
@@ -420,18 +551,14 @@ runs:
               # Checkout admin version
               cd admin
               git checkout $ADMIN_VERSION
-              yarn install --ignore-scripts
+              yarn install --immutable
               cd $DIR
             fi
 
             # Rebuild dist files.
-            # `yarn install` will handle any merge conflicts in `yarn.lock`
-            # It will effectively do a JS Deps upgrade as part of the merge-up and use the
-            # most recent versions of deps allowable by package.json
-            # Note that `yarn install` probably isn't required as the `build` script in package.json
-            # for every module should include `yarn &&` which will do `yarn install`, though we include
-            # it here just to be extra sure
-            yarn install --ignore-scripts
+            # yarn install resolves yarn.lock merge conflicts - npmMinimalAgeGate in .yarnrc.yml applies.
+            # --no-immutable because resolving the conflicts rewrites the lockfile
+            yarn install --no-immutable
             yarn build
 
             # Only add client files and yarn.lock so that any other unmerged

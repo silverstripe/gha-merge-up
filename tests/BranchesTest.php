@@ -44,7 +44,7 @@ class BranchesTest extends TestCase
         }
     }
 
-    public function provideBranches()
+    public static function provideBranches()
     {
         $lowestMajor = MetaData::LOWEST_SUPPORTED_CMS_MAJOR;
         $highestMajor = MetaData::HIGHEST_STABLE_CMS_MAJOR;
