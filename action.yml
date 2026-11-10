@@ -90,16 +90,13 @@ runs:
       id: frameworkstatus
       shell: bash
       run: |
+        source ${{ github.action_path }}/funcs.sh
         # Get the highest currently supported framework major version
-        FRAMEWORK_HIGHEST_MAJOR=$(jq -r '.supportedModules[] | select(.packagist == "silverstripe/framework") | .majorVersionMapping | keys[]' __repositories.json | tail -n 1)
+        FRAMEWORK_HIGHEST_MAJOR=$(framework_highest_major __repositories.json)
         echo "FRAMEWORK_HIGHEST_MAJOR is $FRAMEWORK_HIGHEST_MAJOR"
         # Check if there is y.2.0 tag for the current supported major version of framework
-        FRAMEWORK_TWO_TAG_EXISTS=0
-        TWO_TAG=$(jq -r --arg framework_highest_major "$FRAMEWORK_HIGHEST_MAJOR" '.[] | select(.name == $framework_highest_major + ".2.0")' __framework_tags.json)
+        FRAMEWORK_TWO_TAG_EXISTS=$(framework_two_tag_exists "$FRAMEWORK_HIGHEST_MAJOR" __framework_tags.json)
         rm __framework_tags.json
-        if [[ $TWO_TAG != "" ]]; then
-          FRAMEWORK_TWO_TAG_EXISTS=1
-        fi
         echo "FRAMEWORK_TWO_TAG_EXISTS is $FRAMEWORK_TWO_TAG_EXISTS"
         echo "framework_highest_major=$FRAMEWORK_HIGHEST_MAJOR" >> "$GITHUB_OUTPUT"
         echo "framework_two_tag_exists=$FRAMEWORK_TWO_TAG_EXISTS" >> "$GITHUB_OUTPUT"
@@ -110,11 +107,8 @@ runs:
       env:
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
-        # Create a module map of { module_major: cms_version }
-        # e.g. for silverstripe/admin it will be { "1": "4", "2": "5", "3": "6" }
-        # Note that unlike gha-dispatch-ci this includes .misc, because merge-up also runs on
-        # repositories in that category
-        MODULE_MAP=$(jq -r -c --arg github_repository "$GITHUB_REPOSITORY" '(.supportedModules + .misc)[] | select(.github == $github_repository) | .majorVersionMapping | to_entries | map({key: .value[0], value: .key}) | from_entries' __repositories.json)
+        source ${{ github.action_path }}/funcs.sh
+        MODULE_MAP=$(module_map __repositories.json "$GITHUB_REPOSITORY")
         rm __repositories.json
         echo "MODULE_MAP is $MODULE_MAP"
         echo "module_map=$MODULE_MAP" >> $GITHUB_OUTPUT
@@ -219,24 +213,8 @@ runs:
         fi
 
         # Remove branches for CMS major release lines which are no longer in full support
-        # Those branches only receive security fixes, which are merged up manually
-        SUPPORTED_BRANCHES=""
-        for BRANCH in $BRANCHES; do
-          BRANCH_MAJOR=$(echo "$BRANCH" | cut -d'.' -f1)
-          CMS_MAJOR=$(echo "$MODULE_MAP" | jq -r --arg branch_major "$BRANCH_MAJOR" '.[$branch_major] // ""')
-          if [[ $CMS_MAJOR == "" ]]; then
-            # Keep branches we cannot map to a CMS major e.g. repositories without meta-data
-            SUPPORTED_BRANCHES="$SUPPORTED_BRANCHES $BRANCH"
-          elif (( $CMS_MAJOR >= $FRAMEWORK_HIGHEST_MAJOR )); then
-            SUPPORTED_BRANCHES="$SUPPORTED_BRANCHES $BRANCH"
-          elif (( $CMS_MAJOR == $FRAMEWORK_HIGHEST_MAJOR - 1 )) && [[ $FRAMEWORK_TWO_TAG_EXISTS == "0" ]]; then
-            # The previous major leaves full support when the current major gets its x.2.0 release
-            SUPPORTED_BRANCHES="$SUPPORTED_BRANCHES $BRANCH"
-          else
-            echo "Branch $BRANCH is for CMS $CMS_MAJOR which is no longer in full support, it will not be merged up"
-          fi
-        done
-        BRANCHES=$(echo $SUPPORTED_BRANCHES)
+        source ${{ github.action_path }}/funcs.sh
+        BRANCHES=$(filter_supported_branches "$BRANCHES" "$MODULE_MAP" "$FRAMEWORK_HIGHEST_MAJOR" "$FRAMEWORK_TWO_TAG_EXISTS")
         echo "Supported BRANCHES is $BRANCHES"
         if [[ $BRANCHES == "" ]]; then
           echo "No branches to merge-up"
